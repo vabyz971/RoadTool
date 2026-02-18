@@ -52,6 +52,10 @@ public partial class RoadComponent
 
 	private void RemoveLampposts()
 	{
+		// If we're in play mode, do not remove (Since they're already saved in the scene file)
+		if (LoadingScreen.IsVisible || Game.IsPlaying)
+			return;
+		
 		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "Lampposts");
 
 		if (containerObject.IsValid())
@@ -76,8 +80,11 @@ public partial class RoadComponent
 
 	private void BuildLampposts()
 	{
+		// If we're in play mode, do not build (Since they're already saved in the scene file)
+		if (LoadingScreen.IsVisible || Game.IsPlaying)
+			return;
+		
 		GameObject containerObject = new GameObject(GameObject, true, "Lampposts");
-		containerObject.Flags |= GameObjectFlags.NotSaved;
 		
 		float splineLength = Spline.Length;
 		float effectiveLength = splineLength - StartOffset - EndOffset;
@@ -197,16 +204,13 @@ public partial class RoadComponent
 		
 		if (!lamppostObject.IsValid())
 			return;
-
-		lamppostObject.BreakFromPrefab();
 		
-		lamppostObject.Flags |= GameObjectFlags.NotSaved;
 		lamppostObject.LocalPosition = _Position;
 		lamppostObject.LocalRotation = _Rotation;
 	}
-
-
-
+	
+	
+	
 	private Rotation CalculateLamppostRotation(Vector3 _Forward, Vector3 _SplineUp, float _YawOffset)
 	{
 		if (!AlignToSplineRotation)
