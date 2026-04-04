@@ -2,36 +2,27 @@ using System;
 using System.Linq;
 using Sandbox;
 
-#if SANDBOX_EDITOR
-using Editor;
-using RedSnail.RoadTool.Editor; 
-#endif
-
 namespace RedSnail.RoadTool;
 
 public partial class RoadComponent
 {
-	[Property, FeatureEnabled("Terrain", Icon = "landscape", Tint = EditorTint.Green)]
+	[Property, FeatureEnabled( "Terrain", Icon = "landscape", Tint = EditorTint.Green )]
 	private bool HasTerrainModification { get; set; } = false;
 
-	[Property(Title = "Cible du Terrain"), Feature("Terrain")]
-	public Terrain TerrainTarget { get; set; }
+	[Property, Feature( "Terrain" ), Hide]
+	private Terrain TerrainTarget { get; set; }
 
-	[Property(Title = "Rayon de lissage"), Feature("Terrain"), Range(0f, 2000f)]
+	[Property, Feature( "Terrain" ), Range( 0f, 2000f )]
 	public float TerrainFalloffRadius { get; set; } = 500f;
 
-	[Property(Title = "Précision d'échantillonnage"), Feature("Terrain"), Range(1f, 500f)]
+	[Property, Feature( "Terrain" ), Range( 10f, 500f )]
 	public float TerrainStepPrecision { get; set; } = 50f;
 
-	[Property(Title = "Décalage de hauteur"), Feature("Terrain"), Range(-100f, 100f)]
+	[Property, Feature( "Terrain" ), Range( -10f, 10f )]
 	public float TerrainHeightOffset { get; set; } = 0f;
 
-#if SANDBOX_EDITOR
-	[EditorEvent.Component.ContextMenu( "Générer la route sur le terrain" )]
-	[Button( "Générer la route sur le terrain", "terrain" ), Feature( "Terrain" )]
-#endif
 	/// <summary>
-	/// Adapte la géométrie du terrain à la forme de la spline.
+	/// Adapts the terrain geometry to the spline shape.
 	/// </summary>
 	public void AdaptTerrainToRoad()
 	{
@@ -56,7 +47,7 @@ public partial class RoadComponent
 			return;
 		}
 
-		// 1. Paramètres du Terrain et de la Route
+		// 1. Terrain and Road Parameters
 		int resolution = storage.Resolution;
 		float terrainSize = storage.TerrainSize;
 		float terrainMaxHeight = storage.TerrainHeight;
@@ -64,12 +55,8 @@ public partial class RoadComponent
 		float roadWidthHalf = RoadWidth * 0.5f;
 		int sampleCount = Math.Max( 1, (int)MathF.Ceiling( Spline.Length / Math.Max( 5f, TerrainStepPrecision ) ) );
 
-		// 2. Initialisation des buffers de calcul
+		// 2. Initialization of calculation buffers
 		var heightMap = storage.HeightMap;
-
-		// Capture de l'état initial pour le Undo
-		var previousHeightMap = new ushort[heightMap.Length];
-		Array.Copy( heightMap, previousHeightMap, heightMap.Length );
 
 		var updatedHeights = new float[heightMap.Length];
 		var bestDistance = new float[heightMap.Length];
@@ -80,7 +67,7 @@ public partial class RoadComponent
 			bestDistance[i] = float.MaxValue;
 		}
 
-		// 3. Échantillonnage de la Spline
+		// 3. Spline Sampling
 		var frames = UseRotationMinimizingFrames
 			? CalculateRotationMinimizingTangentFrames( Spline, sampleCount + 1 )
 			: CalculateTangentFramesUsingUpDir( Spline, sampleCount + 1 );
@@ -93,11 +80,11 @@ public partial class RoadComponent
 			var worldPos = WorldTransform.PointToWorld( frame.Position );
 			var worldRight = WorldRotation * frame.Rotation.Right;
 
-			// Conversion en coordonnées locales terrain pour supporter la rotation/translation
+			// Conversion to local terrain coordinates to support rotation/translation
 			var localPos = TerrainTarget.Transform.World.PointToLocal( worldPos );
 			var roadRightLocal = TerrainTarget.Transform.World.Rotation.Inverse * worldRight;
 
-			// Détection adaptative du référentiel (Centre vs Coin)
+			// Adaptive coordinate system detection (Center vs Corner)
 			float u = localPos.x / terrainSize;
 			float v = localPos.y / terrainSize;
 			bool localIsCentered = false;
@@ -129,15 +116,15 @@ public partial class RoadComponent
 			}
 			Vector3 roadCenter = localPos.WithZ( 0 );
 
-			// Modification des pixels dans le rayon d'influence
+			// Modify pixels within influence radius
 			for ( int ix = gridX - pixelRadius; ix <= gridX + pixelRadius; ix++ )
 			{
 				for ( int iy = gridY - pixelRadius; iy <= gridY + pixelRadius; iy++ )
 				{
 					if ( ix < 0 || ix >= resolution || iy < 0 || iy >= resolution ) continue;
-					
-					// Indexation s&box : ix (X Monde) est l'axe majeur, iy (Y Monde) est l'axe mineur
-					// On utilise iy * resolution + ix pour correspondre au stockage standard si ix*res ne marche pas
+
+					// s&box indexing: ix (World X) is major axis, iy (World Y) is minor axis
+					// Use iy * resolution + ix to match standard storage if ix*res doesn't work
 					int index = iy * resolution + ix;
 
 					float nodeLocalX = (ix / (float)(resolution - 1)) * terrainSize - (localIsCentered ? halfSize : 0);
@@ -148,7 +135,7 @@ public partial class RoadComponent
 
 					if ( distance > totalRadius ) continue;
 
-					// Calcul de la hauteur avec Roll et Offset
+					// Height calculation with Roll and Offset
 					var nodeLocal2D = new Vector2( nodeLocalX - localPos.x, nodeLocalY - localPos.y );
 					float lateral = Vector2.Dot( nodeLocal2D, roadRight2D );
 					float rollHeightOffset = roadRightLocal.z * lateral;
@@ -165,7 +152,7 @@ public partial class RoadComponent
 						float smoothT = t * t * (3f - 2f * t);
 						candidateHeight = MathX.Lerp( roadCoreHeight, (heightMap[index] / (float)ushort.MaxValue) * terrainMaxHeight, smoothT );
 					}
-					
+
 					if ( distance < bestDistance[index] )
 					{
 						bestDistance[index] = distance;
@@ -176,9 +163,9 @@ public partial class RoadComponent
 			}
 		}
 
-		if (hasModified)
+		if ( hasModified )
 		{
-			// 4. Encodage final vers ushort et synchronisation GPU
+			// 4. Final encoding to ushort and GPU synchronization
 			for ( int i = 0; i < heightMap.Length; i++ )
 			{
 				heightMap[i] = (ushort)MathF.Round( Math.Clamp( updatedHeights[i], 0f, terrainMaxHeight ) / terrainMaxHeight * ushort.MaxValue );
@@ -189,33 +176,7 @@ public partial class RoadComponent
 			TerrainTarget.Create();
 			TerrainTarget.SyncGPUTexture();
 
-#if SANDBOX_EDITOR
-			var newHeightMap = new ushort[heightMap.Length];
-			Array.Copy( heightMap, newHeightMap, heightMap.Length );
-
-			var targetTerrain = TerrainTarget;
-			var targetStorage = storage;
-
-			SceneEditorSession.Active.AddUndo( "Align Terrain to Road",
-				undo: () =>
-				{
-					if ( !targetTerrain.IsValid() ) return;
-					targetStorage.HeightMap = previousHeightMap;
-					targetStorage.StateHasChanged();
-					targetTerrain.Create();
-					targetTerrain.SyncGPUTexture();
-				},
-				redo: () =>
-				{
-					if ( !targetTerrain.IsValid() ) return;
-					targetStorage.HeightMap = newHeightMap;
-					targetStorage.StateHasChanged();
-					targetTerrain.Create();
-					targetTerrain.SyncGPUTexture();
-				} );
-#endif
-
-			Log.Info( "RoadTool: Terrain terraformé avec succès !" );
+			Log.Info( "RoadTool: Terrain terraformed successfully!" );
 		}
 	}
 }
