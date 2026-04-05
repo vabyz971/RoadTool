@@ -48,7 +48,7 @@ public class TerrainEditorTool : EditorTool
             propertiesGroup.Add( new Button( "Apply to the Ground", "landscape" ) { Clicked = AlignTerrainToRoad } );
 
             Layout texGroup = sidebar.AddGroup( "Texture" );
-            var texProperties = new[] { "TerrainEdgeRadius", "TerrainTextureNoise", "TerrainEdgeMaterials", "TerrainEdgeBlendGradient" };
+            var texProperties = new[] { "TerrainEdgeRadius", "TerrainTargetLayer", "TerrainTextureNoise", "TerrainEdgeMaterials", "TerrainEdgeBlendGradient" };
 
             foreach ( var propName in texProperties )
             {

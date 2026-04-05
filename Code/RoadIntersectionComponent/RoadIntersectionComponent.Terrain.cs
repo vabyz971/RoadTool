@@ -21,6 +21,9 @@ public partial class RoadIntersectionComponent
 	[Property, Feature( "Terrain" ), Group( "Texture" ), Range( 100f, 1000f )]
 	public float TerrainEdgeRadius { get; set; } = 500f;
 
+	[Property, Feature( "Terrain" ), Group( "Texture" )]
+	public TerrainTextureLayer TerrainTargetLayer { get; set; } = TerrainTextureLayer.Overlay;
+
 	[Property, Feature( "Terrain" ), Group( "Texture" ), Range( 0f, 1f )]
 	public float TerrainTextureNoise { get; set; } = 0.2f;
 
@@ -33,7 +36,7 @@ public partial class RoadIntersectionComponent
 		new Gradient.ColorFrame( 1, Color.White.WithAlpha( 0f ) )
 	);
 
-	public void AdaptTerrainToIntersection()
+	public void AdaptTerrainToIntersection() 
 	{
 		if ( !TerrainTarget.IsValid() )
 			TerrainTarget = Scene.GetAllComponents<Terrain>().FirstOrDefault();
@@ -47,7 +50,7 @@ public partial class RoadIntersectionComponent
 		var storage = TerrainTarget.Storage;
 		if ( storage == null || storage.HeightMap == null ) return;
 
-		// 1. Setup Parameters
+		// 1. Setup Parameters 
 		int resolution = storage.Resolution;
 		float terrainSize = storage.TerrainSize;
 		float terrainMaxHeight = storage.TerrainHeight;
@@ -61,14 +64,14 @@ public partial class RoadIntersectionComponent
 		float boundSize = (Shape == IntersectionShape.Rectangle ? Math.Max( Width, Length ) * 0.5f : Radius) + TerrainFalloffRadius;
 		BBox worldBounds = new BBox( WorldPosition - new Vector3( boundSize ), WorldPosition + new Vector3( boundSize ) );
 
-		var heightMap = storage.HeightMap;
+		var heightMap = storage.HeightMap; 
 
-		// Capture initial state for Undo
+		// Capture initial state for Undo 
 		var previousHeightMap = heightMap.ToArray();
 		bool hasModified = false;
 
-		// Initialize buffers for height calculation
-		var updatedHeights = new float[heightMap.Length];
+		// Initialize buffers for height calculation 
+		var updatedHeights = new float[heightMap.Length]; 
 		var bestDistance = new float[heightMap.Length];
 
 		for ( int i = 0; i < heightMap.Length; i++ )
@@ -78,7 +81,7 @@ public partial class RoadIntersectionComponent
 			bestDistance[i] = float.MaxValue;
 		}
 
-		// 2. Grid Traversal
+		// 2. Grid Traversal 
 		for ( int ix = 0; ix < resolution; ix++ )
 		{
 			for ( int iy = 0; iy < resolution; iy++ )
@@ -104,13 +107,13 @@ public partial class RoadIntersectionComponent
 
 				int index = iy * resolution + ix;
 
-				// 2. Distance to intersection shape
+				// 2. Distance to intersection shape 
 				Vector3 relativePos = WorldTransform.PointToLocal( pixelWorldPos );
 				float distance = GetDistanceToIntersectionShape( relativePos.WithZ( 0 ) );
 
 				if ( distance > TerrainFalloffRadius ) continue;
 
-				// 3. Target height matching RoadComponent (0 to MaxHeight range)
+				// 3. Target height matching RoadComponent (0 to MaxHeight range) 
 				Vector3 intersectionLocalPos = TerrainTarget.Transform.World.PointToLocal( WorldPosition );
 				float targetHeightFloat = Math.Clamp( intersectionLocalPos.z + TerrainHeightOffset, 0f, terrainMaxHeight );
 
@@ -137,7 +140,7 @@ public partial class RoadIntersectionComponent
 		}
 
 		if ( hasModified )
-		{
+		{ 
 			// 4. Final encoding to ushort (Mapping back to 0..1 without the 0.5 offset)
 			for ( int i = 0; i < heightMap.Length; i++ )
 			{
@@ -161,7 +164,7 @@ public partial class RoadIntersectionComponent
 		float terrainSize = storage.TerrainSize;
 		float halfSize = terrainSize * 0.5f;
 
-		// Identify all material indices in the terrain storage
+		// Identify all material indices in the terrain storage 
 		var materialIndices = new int[TerrainEdgeMaterials.Length];
 		for ( int m = 0; m < TerrainEdgeMaterials.Length; m++ )
 		{
@@ -174,8 +177,8 @@ public partial class RoadIntersectionComponent
 			materialIndices[m] = idx;
 		}
 
-		float boundSize = (Shape == IntersectionShape.Rectangle ? Math.Max( Width, Length ) * 0.5f : Radius) + TerrainEdgeRadius; // This line is unchanged
-		BBox worldBounds = new BBox( WorldPosition - new Vector3( boundSize ), WorldPosition + new Vector3( boundSize ) ); // This line is unchanged
+		float boundSize = (Shape == IntersectionShape.Rectangle ? Math.Max( Width, Length ) * 0.5f : Radius) + TerrainEdgeRadius; // This line is unchanged 
+		BBox worldBounds = new BBox( WorldPosition - new Vector3( boundSize ), WorldPosition + new Vector3( boundSize ) ); // This line is unchanged 
 
 		var controlMap = storage.ControlMap;
 		bool hasModified = false;
@@ -207,7 +210,7 @@ public partial class RoadIntersectionComponent
 				float blendStrength = TerrainEdgeBlendGradient.Evaluate( t ).a;
 
 				if ( blendStrength > 0.01f )
-				{
+				{ 
 					// Ajout d'un bruit déterministe pour entremêler les textures (Dithering)
 					float pixelNoise = ((float)((index * 1103515245 + 12345) & 0x7FFFFFFF) / 0x7FFFFFFF) * TerrainTextureNoise - (TerrainTextureNoise * 0.5f);
 					float noisyT = Math.Clamp( t + pixelNoise, 0f, 1f );
@@ -221,7 +224,7 @@ public partial class RoadIntersectionComponent
 					else
 					{
 						int edgeMatCount = materialIndices.Length - 1;
-						// Utilisation de noisyT pour le choix de l'index
+						// Using noisyT for index selection 
 						int edgeIdx = edgeMatCount > 0 ? Math.Clamp( (int)(noisyT * edgeMatCount), 0, edgeMatCount - 1 ) + 1 : 0;
 						materialIndex = materialIndices[edgeIdx];
 					}
@@ -229,14 +232,14 @@ public partial class RoadIntersectionComponent
 					uint packed = controlMap[index];
 					var mat = new CompactTerrainMaterial( packed );
 
-					// Si notre texture de route est déjà en base, on réduit le BlendFactor pour la révéler
-					if ( mat.BaseTextureId == (byte)materialIndex )
+					if ( TerrainTargetLayer == TerrainTextureLayer.Base )
 					{
+						mat.BaseTextureId = (byte)materialIndex;
 						mat.BlendFactor = (byte)MathX.Lerp( mat.BlendFactor, 0, blendStrength );
 					}
 					else
 					{
-						// Sinon, on la place en Overlay et on augmente le BlendFactor pour l'afficher
+						// Otherwise, we place it in Overlay and increase the BlendFactor to display it
 						mat.OverlayTextureId = (byte)materialIndex;
 						mat.BlendFactor = (byte)MathX.Lerp( mat.BlendFactor, 255, blendStrength );
 					}
